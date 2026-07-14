@@ -466,7 +466,7 @@ export function ReversePromptForm({ wideMode = false, disabled = false, onConfig
                   <Sparkles className="h-3 w-3" />
                   <span className="shrink-0 truncate text-[11px]">{modelLabel}</span>
                 </PopoverTrigger>
-                <PopoverContent className="w-48 p-1" align="start">
+                <PopoverContent className="w-48 max-h-[min(60vh,20rem)] overflow-y-auto p-1" align="start">
                   {reverseModelOptions.map((option) => (
                     <button
                       key={option.value}

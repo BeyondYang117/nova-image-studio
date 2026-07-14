@@ -43,12 +43,23 @@ import {
   type SubmitActions,
 } from '@/lib/workspace-task-service';
 import { cn } from '@/lib/utils';
-import { IS_INTEGRATED } from '@/lib/integration';
+import { IS_INTEGRATED, apiPath, getIntegrationSession } from '@/lib/integration';
 import { BA_RANDOM_URL, BING_WALLPAPER_URL } from '@/lib/constants';
 
 export function WorkspaceShell() {
   const queueStatus = useQueueStatus();
   const { wideMode, toggleWideMode } = useWideMode();
+  // 宽屏 logo：集成模式用平台品牌（logo + 站点名），独立部署用本地 favicon（挂载前缀感知）
+  const { brandLogo, brandTitle } = useMemo(() => {
+    if (IS_INTEGRATED) {
+      const session = getIntegrationSession();
+      return {
+        brandLogo: session?.logo || apiPath('/favicon.png'),
+        brandTitle: session?.systemName || 'Nova Image',
+      };
+    }
+    return { brandLogo: apiPath('/favicon.png'), brandTitle: 'Nova Image' };
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [missingApiKeyDialogOpen, setMissingApiKeyDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -255,15 +266,15 @@ export function WorkspaceShell() {
                   type="button"
                   onClick={promptGallery.handlePromptGalleryEntry}
                   className="flex items-center gap-2 px-2 pt-3 pb-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Nova Image logo"
+                  aria-label={`${brandTitle} logo`}
                 >
                   <img
-                    src="/favicon.png"
-                    alt="Nova Image"
+                    src={brandLogo}
+                    alt={`${brandTitle} logo`}
                     className="h-8 w-8 shrink-0 rounded-lg object-cover ring-1 ring-border/60"
                   />
                   <div className="min-w-0">
-                    <h2 className="truncate text-base font-semibold tracking-tight leading-tight">Nova Image</h2>
+                    <h2 className="truncate text-base font-semibold tracking-tight leading-tight">{brandTitle}</h2>
                     <p className="truncate text-[11px] text-muted-foreground leading-tight">批量 API 图像生成器</p>
                   </div>
                 </button>
