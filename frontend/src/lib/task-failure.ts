@@ -1,4 +1,5 @@
 import type { NovaTaskResponse, NovaTaskStatus } from '@/lib/ccode-task-client';
+import { reportIntegrationErrorSignal } from '@/lib/integration';
 
 export type FailureReason = 'restart' | 'expired' | 'api' | 'network' | 'rate_limit' | 'queue_full' | 'unknown';
 
@@ -81,6 +82,8 @@ function isTimeoutErrorMessage(message: string): boolean {
 function classifyFailureMessage(message: string | undefined): FailureClassification {
   const msg = (message || '').trim();
   if (!msg) return { terminal: false, reason: 'unknown' };
+  // 集成模式：任务失败文本里若携带平台的鉴权/额度错误，向宿主发信号（独立部署为空操作）
+  reportIntegrationErrorSignal(msg);
   if (isServerRestartError(msg)) return { terminal: true, reason: 'restart' };
   if (isRateLimitMessage(msg)) return { terminal: true, reason: 'rate_limit' };
   if (isQueueFullMessage(msg)) return { terminal: true, reason: 'queue_full' };

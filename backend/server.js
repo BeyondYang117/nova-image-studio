@@ -96,6 +96,31 @@ function resolveNovaApiBaseUrl() {
   return normalizeBaseUrl(getRuntimeEnv().NOVA_API_BASE_URL) || 'https://api.openai.com';
 }
 
+// ===== abu-api 集成模式 =====
+// NOVA_UPSTREAM_BASE_URL：钉死所有上游调用地址（任务生图 / proxy/text / proxy/models），
+// 忽略前端传入的 baseUrl。集成部署时指向平台网关（如 http://abu-api:3000/api/nova），
+// 同时防止本服务被当作任意地址的开放代理。
+function resolveUpstreamOverrideBaseUrl() {
+  return normalizeBaseUrl(getRuntimeEnv().NOVA_UPSTREAM_BASE_URL) || '';
+}
+
+// NOVA_BASE_PATH：应用挂载子路径（如 /nova-app）。abu-api 反代会透传完整路径，
+// 前端静态资源（Next.js basePath 构建）与 API 调用都带该前缀，进入路由前统一剥掉。
+function normalizeBasePath(value) {
+  const trimmed = String(value || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+const BASE_PATH = normalizeBasePath(process.env.NOVA_BASE_PATH || '');
+
+function stripBasePath(pathname) {
+  if (!BASE_PATH) return pathname;
+  if (pathname === BASE_PATH) return '/';
+  if (pathname.startsWith(`${BASE_PATH}/`)) return pathname.slice(BASE_PATH.length);
+  return pathname;
+}
+
 function hashPromptGalleryPassword(password) {
   return createHash('sha256')
     .update(`${PROMPT_GALLERY_PASSWORD_SALT}${String(password || '')}`)
@@ -364,7 +389,7 @@ function saveImageToDisk(taskId, itemIndex, subIndex, imageBuffer, mimeType) {
   const fileName = `${taskId}-${itemIndex}-${subIndex}.${ext}`;
   const filePath = path.join(IMAGE_DIR, fileName);
   fs.writeFileSync(filePath, imageBuffer);
-  return { filePath, httpUrl: `/api/nova/images/${taskId}/${itemIndex}` };
+  return { filePath, httpUrl: `${BASE_PATH}/api/nova/images/${taskId}/${itemIndex}` };
 }
 
 async function downloadUrlToDisk(taskId, itemIndex, subIndex, imageUrl) {
@@ -644,6 +669,11 @@ function validateCreatePayload(body) {
 }
 
 function createTask(body, req) {
+  // 集成模式：上游地址由服务端钉死，前端传入值仅作占位
+  const upstreamOverride = resolveUpstreamOverrideBaseUrl();
+  if (upstreamOverride && body && typeof body === 'object') {
+    body.baseUrl = upstreamOverride;
+  }
   validateCreatePayload(body);
   const limitConfig = getLimitConfig();
   if (isRejectNewTasksEnabled()) {
@@ -1588,6 +1618,10 @@ async function handleApi(req, res, pathname) {
     if (req.method === 'POST' && apiPathname === '/api/nova/proxy/text') {
       try {
         const body = await readJsonBody(req);
+        const upstreamOverride = resolveUpstreamOverrideBaseUrl();
+        if (upstreamOverride) {
+          body.baseUrl = upstreamOverride;
+        }
         const { protocol, baseUrl, apiKey, model, stream, requestBody } = body;
         if (!baseUrl || !apiKey) {
           sendJson(res, 400, { error: 'Missing baseUrl or apiKey' });
@@ -1677,7 +1711,8 @@ async function handleApi(req, res, pathname) {
     if (req.method === 'GET' && apiPathname === '/api/nova/proxy/models') {
       try {
         const parsed = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-        const baseUrl = parsed.searchParams.get('baseUrl');
+        const upstreamOverride = resolveUpstreamOverrideBaseUrl();
+        const baseUrl = upstreamOverride || parsed.searchParams.get('baseUrl');
         const apiKey = parsed.searchParams.get('apiKey');
         const protocol = parsed.searchParams.get('protocol') || 'openai';
         if (!baseUrl || !apiKey) {
@@ -1764,12 +1799,14 @@ const startServer = () => {
   const wss = setupWebSocketServer();
   const httpServer = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url || '/', `http://${req.headers.host || `${HOSTNAME}:${PORT}`}`);
-    if (parsedUrl.pathname?.startsWith('/api/nova/')) {
-      const handled = await handleApi(req, res, parsedUrl.pathname);
+    // 集成部署：剥掉挂载前缀（如 /nova-app），API 与静态文件按原始路径路由
+    const pathname = stripBasePath(parsedUrl.pathname || '/');
+    if (pathname.startsWith('/api/nova/')) {
+      const handled = await handleApi(req, res, pathname);
       if (handled || res.headersSent || res.writableEnded) return;
     }
     if (!IS_DEV) {
-      if (serveStatic(req, res, parsedUrl.pathname || '/')) return;
+      if (serveStatic(req, res, pathname)) return;
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Not Found');
       return;
@@ -1784,7 +1821,7 @@ const startServer = () => {
   httpServer.on('upgrade', (req, socket, head) => {
     let pathname;
     try {
-      pathname = new URL(req.url || '/', `http://${req.headers.host || `${HOSTNAME}:${PORT}`}`).pathname;
+      pathname = stripBasePath(new URL(req.url || '/', `http://${req.headers.host || `${HOSTNAME}:${PORT}`}`).pathname);
     } catch {
       socket.destroy();
       return;

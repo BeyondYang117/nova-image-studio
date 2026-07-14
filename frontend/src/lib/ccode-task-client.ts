@@ -13,6 +13,7 @@ import {
   normalizeTextModelBaseUrl,
 } from '@/lib/model-endpoints';
 import type { TextProviderProtocol } from '@/lib/nova-text-protocol';
+import { IS_INTEGRATED, apiPath, getIntegrationModels } from '@/lib/integration';
 
 export interface ImageReference {
   data: string;
@@ -189,7 +190,7 @@ async function fetchWithTimeout(
 }
 
 export async function createNovaTask(input: CreateNovaTaskInput): Promise<string> {
-  const response = await fetchWithTimeout('/api/nova/tasks', {
+  const response = await fetchWithTimeout(apiPath('/api/nova/tasks'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -233,6 +234,20 @@ export async function checkModelsAvailability(
       return [];
     }
 
+    // 集成模式：模型均来自平台下发列表，直接本地比对；
+    // 不走 proxy/models（避免 relay key 出现在 URL 查询串、被网关访问日志记录）
+    if (IS_INTEGRATED) {
+      const available = new Set(getIntegrationModels());
+      return filteredModels.map((model) => ({
+        modelId: model.id,
+        actualName: model.name,
+        available: available.has(model.modelId),
+        message: available.has(model.modelId)
+          ? model.modelId
+          : `模型 ${model.modelId} 不在平台可用列表中`,
+      }));
+    }
+
     return Promise.all(filteredModels.map(async (model) => {
       try {
         const normalizedBaseUrl = completeImageModels.some(imageModel => imageModel.id === model.id)
@@ -248,7 +263,7 @@ export async function checkModelsAvailability(
         }
 
         // 统一通过后端代理使用 /v1/models（NewAPI 兼容）
-        const proxyUrl = `/api/nova/proxy/models?baseUrl=${encodeURIComponent(normalizedBaseUrl)}&apiKey=${encodeURIComponent(model.apiKey)}&protocol=${model.protocol}`;
+        const proxyUrl = apiPath(`/api/nova/proxy/models?baseUrl=${encodeURIComponent(normalizedBaseUrl)}&apiKey=${encodeURIComponent(model.apiKey)}&protocol=${model.protocol}`);
         const response = await fetch(proxyUrl, { method: 'GET', cache: 'no-store' });
         if (!response.ok) {
           const detail = await response.text().catch(() => '');
@@ -317,7 +332,7 @@ export function resolveTextTaskProvider(modelId: string): { apiKey: string; base
 }
 
 export async function getNovaTask(taskId: string): Promise<NovaTaskResponse> {
-  const response = await fetchWithTimeout(`/api/nova/tasks/${encodeURIComponent(taskId)}`, {
+  const response = await fetchWithTimeout(apiPath(`/api/nova/tasks/${encodeURIComponent(taskId)}`), {
     method: 'GET',
     cache: 'no-store',
   }, TASK_REQUEST_TIMEOUT);
@@ -325,7 +340,7 @@ export async function getNovaTask(taskId: string): Promise<NovaTaskResponse> {
 }
 
 export async function getNovaQueueStatus(): Promise<NovaQueueStatus> {
-  const response = await fetchWithTimeout('/api/nova/queue-status', {
+  const response = await fetchWithTimeout(apiPath('/api/nova/queue-status'), {
     method: 'GET',
     cache: 'no-store',
   }, TASK_REQUEST_TIMEOUT);
@@ -333,7 +348,7 @@ export async function getNovaQueueStatus(): Promise<NovaQueueStatus> {
 }
 
 export async function ackNovaTask(taskId: string): Promise<void> {
-  await fetch(`/api/nova/tasks/${encodeURIComponent(taskId)}/ack`, {
+  await fetch(apiPath(`/api/nova/tasks/${encodeURIComponent(taskId)}/ack`), {
     method: 'POST',
   }).catch(() => undefined);
 }

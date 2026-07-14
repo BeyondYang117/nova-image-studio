@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiPath } from '@/lib/integration';
 
 // 1 = 常驻（直接显示） 2 = 私密（需密码） 3 = 关闭（完全隐藏）
 export type PromptGalleryMode = '1' | '2' | '3';
@@ -12,7 +13,7 @@ export function usePromptGalleryConfig() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/nova/config', { cache: 'no-store' })
+    fetch(apiPath('/api/nova/config'), { cache: 'no-store' })
       .then(res => res.json())
       .then((data: { promptGalleryMode?: string; promptGalleryPasswordEnabled?: boolean }) => {
         if (cancelled) return;

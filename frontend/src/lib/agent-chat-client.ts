@@ -22,6 +22,7 @@ import {
 } from '@/lib/nova-proxy-text';
 import type { TextProviderProtocol } from '@/lib/nova-text-protocol';
 import { readSseStream } from '@/lib/sse-stream-parser';
+import { apiPath, reportIntegrationErrorSignal } from '@/lib/integration';
 
 const AGENT_GPT_REQUEST_MAX_ATTEMPTS = 3;
 const AGENT_CHAT_ATTEMPT_TIMEOUT_MS = 45_000;
@@ -305,7 +306,7 @@ async function runAgentStream(
   const instructions = buildInstructions(input.catalog, input.modelCatalog);
   const body = buildAgentRequestBody(input.protocol, input.model || AGENT_TEXT_MODEL_FALLBACK, input.history, instructions, Boolean(input.webSearch));
 
-  const response = await fetch('/api/nova/proxy/text', {
+  const response = await fetch(apiPath('/api/nova/proxy/text'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -320,7 +321,9 @@ async function runAgentStream(
   });
 
   if (!response.ok) {
-    throw await readHttpError(response);
+    const httpError = await readHttpError(response);
+    reportIntegrationErrorSignal(httpError.message);
+    throw httpError;
   }
   if (!response.body) {
     throw new Error('响应没有可读流');
@@ -397,7 +400,7 @@ async function requestImageDescription(
     { reasoningEffort: 'low' }
   );
 
-  const response = await fetch('/api/nova/proxy/text', {
+  const response = await fetch(apiPath('/api/nova/proxy/text'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -412,7 +415,9 @@ async function requestImageDescription(
   });
 
   if (!response.ok) {
-    throw await readHttpError(response);
+    const httpError = await readHttpError(response);
+    reportIntegrationErrorSignal(httpError.message);
+    throw httpError;
   }
 
   const data = await response.json().catch(() => null);

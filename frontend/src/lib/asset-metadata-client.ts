@@ -6,6 +6,7 @@ import {
   extractTextOutput,
 } from '@/lib/nova-proxy-text';
 import type { TextProviderProtocol } from '@/lib/nova-text-protocol';
+import { apiPath, reportIntegrationErrorSignal } from '@/lib/integration';
 
 const ASSET_METADATA_MODEL = 'gpt-5.4-mini';
 
@@ -68,7 +69,7 @@ export async function generateAssetMetadata(input: GenerateAssetMetadataInput): 
     { reasoningEffort: 'low' }
   );
 
-  const response = await fetch('/api/nova/proxy/text', {
+  const response = await fetch(apiPath('/api/nova/proxy/text'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -89,6 +90,7 @@ export async function generateAssetMetadata(input: GenerateAssetMetadataInput): 
     } catch {
       // ignore
     }
+    reportIntegrationErrorSignal(`${response.status} ${message}`);
     throw new Error(message);
   }
 

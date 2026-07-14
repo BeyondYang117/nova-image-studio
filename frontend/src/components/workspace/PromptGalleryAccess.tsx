@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/workspace/dialogs/ConfirmDialog';
 import type { PromptGalleryMode } from '@/hooks/usePromptGalleryConfig';
+import { apiPath } from '@/lib/integration';
 
 export function usePromptGalleryAccess(
   mode: PromptGalleryMode,
@@ -45,7 +46,7 @@ export function usePromptGalleryAccess(
 
   const handlePasswordSubmit = useCallback(async () => {
     try {
-      const response = await fetch('/api/nova/prompt-gallery/verify', {
+      const response = await fetch(apiPath('/api/nova/prompt-gallery/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passwordInput }),

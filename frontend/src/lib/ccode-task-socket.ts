@@ -1,4 +1,5 @@
 import { getNovaTask, getNovaQueueStatus, type NovaTaskResponse, type NovaQueueStatus } from '@/lib/ccode-task-client';
+import { apiPath } from '@/lib/integration';
 
 type TaskUpdateHandler = (task: NovaTaskResponse) => void;
 type QueueUpdateHandler = (stats: NovaQueueStatus) => void;
@@ -39,7 +40,7 @@ function isWebSocketSupported(): boolean {
 function buildSocketUrl(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const url = new URL('/api/nova/ws', window.location.href);
+    const url = new URL(apiPath('/api/nova/ws'), window.location.href);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     return url.toString();
   } catch {

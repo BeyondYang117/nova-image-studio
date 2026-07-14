@@ -13,6 +13,7 @@ import {
 } from '@/lib/nova-proxy-text';
 import type { TextProviderProtocol } from '@/lib/nova-text-protocol';
 import { readSseStream } from '@/lib/sse-stream-parser';
+import { apiPath, reportIntegrationErrorSignal } from '@/lib/integration';
 
 export interface StreamReverseInput {
   apiKey: string;
@@ -76,7 +77,7 @@ async function streamTextProtocol(
     { stream: true, reasoningEffort: 'high' }
   );
 
-  const response = await fetch('/api/nova/proxy/text', {
+  const response = await fetch(apiPath('/api/nova/proxy/text'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -91,7 +92,9 @@ async function streamTextProtocol(
   });
 
   if (!response.ok) {
-    throw await readHttpError(response);
+    const httpError = await readHttpError(response);
+    reportIntegrationErrorSignal(httpError.message);
+    throw httpError;
   }
   if (!response.body) {
     throw new Error('响应没有可读流');

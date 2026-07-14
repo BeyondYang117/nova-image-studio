@@ -3,21 +3,25 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Script from "next/script";
 import { ServiceWorkerManager } from "@/components/ServiceWorkerManager";
+import { IntegrationGate } from "@/components/IntegrationGate";
 import "./globals.css";
+
+// 集成部署挂载在子路径（如 /nova-app）时，metadata 的静态资源引用需手动加前缀
+const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "");
 
 export const metadata: Metadata = {
   title: "Nova Image - AI 图像生成器",
   description: "Nova Image AI 图像生成工作台",
   icons: {
     icon: [
-      { url: '/favicon.png', type: 'image/png' },
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: `${BASE_PATH}/favicon.png`, type: 'image/png' },
+      { url: `${BASE_PATH}/icon-192.png`, sizes: '192x192', type: 'image/png' },
+      { url: `${BASE_PATH}/icon-512.png`, sizes: '512x512', type: 'image/png' },
     ],
-    shortcut: '/favicon.png',
-    apple: '/icon-192.png',
+    shortcut: `${BASE_PATH}/favicon.png`,
+    apple: `${BASE_PATH}/icon-192.png`,
   },
-  manifest: '/manifest.json',
+  manifest: `${BASE_PATH}/manifest.json`,
   other: {
     'theme-color': '#1a1a2e',
   },
@@ -81,9 +85,11 @@ export default function RootLayout({
         <TooltipProvider>
           <ServiceWorkerManager />
           <ErrorBoundary>
-            <main>
-              {children}
-            </main>
+            <IntegrationGate>
+              <main>
+                {children}
+              </main>
+            </IntegrationGate>
           </ErrorBoundary>
         </TooltipProvider>
       </body>

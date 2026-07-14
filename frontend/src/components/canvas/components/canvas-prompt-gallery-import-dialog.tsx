@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ALL_CATEGORY, DEFAULT_CATEGORIES, PROMPT_DATA_SOURCES, fetchAllPromptSources, getPromptSourceLabel, type PromptWithKey } from "@/lib/prompt-gallery-data";
 import { cn } from "@/lib/utils";
+import { apiPath } from "@/lib/integration";
 
 type CanvasPromptGalleryImportDialogProps = {
   open: boolean;
@@ -34,7 +35,7 @@ async function loadPromptGalleryData() {
 
 async function fetchPromptBlacklist(): Promise<string[]> {
   try {
-    const response = await fetch("/api/nova/blacklist");
+    const response = await fetch(apiPath("/api/nova/blacklist"));
     if (!response.ok) return [];
     const data = await response.json();
     return Array.isArray(data.keywords) ? data.keywords.map((keyword: string) => keyword.toLowerCase()) : [];

@@ -1,0 +1,39 @@
+services:
+  nova-image-studio:
+    # 集成版镜像由 ./build-and-push.sh 构建推送（NEXT_PUBLIC_BASE_PATH=/nova-app
+    # NEXT_PUBLIC_INTEGRATED_MODE=true 已烧入，多架构 amd64/arm64）。
+    # 本地自建集成镜像（不推 Hub）：
+    #   docker build \
+    #     --build-arg NEXT_PUBLIC_INTEGRATED_MODE=true \
+    #     --build-arg NEXT_PUBLIC_BASE_PATH=/nova-app \
+    #     -t abu116/nova-image-studio:latest .
+    image: abu116/nova-image-studio:latest
+    container_name: nova-image-studio
+    ports:
+      - "127.0.0.1:3013:3000" # 仅供宿主机本地调试；abu-api 反代请走下方容器网络
+    environment:
+      # 上游钉死到 abu-api 的 nova relay 段（内网直连，不出公网）。
+      # abu-api 容器名/端口与其 compose 保持一致；跨机部署改为平台公网地址
+      # https://<平台域名>/api/nova
+      - NOVA_UPSTREAM_BASE_URL=http://abu-api:3000/api/nova
+      # 镜像已烧入 NOVA_BASE_PATH=/nova-app，如需覆盖在此设置
+      # - NOVA_BASE_PATH=/nova-app
+    volumes:
+      - ./data:/app/backend/data
+    restart: unless-stopped
+    networks:
+      - abu-api
+
+# 与 abu-api 同机部署：加入其 compose 网络，后台「集成应用 → Nova 绘图工作台 → 服务地址」
+# 填 http://nova-image-studio:3000 。
+# 注意：不要填 http://host.docker.internal:3013 —— 该写法仅在 Docker Desktop（Mac/Windows）
+# 下能访问 127.0.0.1 绑定的端口，Linux 服务器上会 502。
+# 网络实际名称随 abu-api 的部署目录名而变，先在服务器上确认：
+#   docker inspect abu-api --format '{{range $k,$_ := .NetworkSettings.Networks}}{{$k}}{{end}}'
+# 与默认值不符时，在本目录 .env 中设置 ABU_API_NETWORK=<实际名称>。
+# 跨服务器部署：删除本 networks 配置，把 ports 改绑内网网卡，后台填 http://<内网IP>:3013 ，
+# 并把 NOVA_UPSTREAM_BASE_URL 改为平台地址。
+networks:
+  abu-api:
+    external: true
+    name: ${ABU_API_NETWORK:-abu-api_abuapi-network}

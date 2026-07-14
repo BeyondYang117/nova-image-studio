@@ -44,6 +44,7 @@ import { readSseStream } from "@/lib/sse-stream-parser";
 import { MODEL_IMAGE_LIMITS } from "@/lib/gemini-config";
 import { normalizeModel } from "@/lib/model-capabilities";
 import type { PromptWithKey } from "@/lib/prompt-gallery-data";
+import { apiPath } from "@/lib/integration";
 
 type DialogState = { type: "crop" | "split" | "upscale" | "angle"; nodeId: string; source: string } | null;
 
@@ -1342,7 +1343,7 @@ export function CanvasEditor({ projectId, onBack, onRequireApiKey, showToast, sh
         { stream: true, systemInstruction: systemPrompt, reasoningEffort: "low" }
       );
 
-      const response = await fetch("/api/nova/proxy/text", {
+      const response = await fetch(apiPath("/api/nova/proxy/text"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1443,7 +1444,7 @@ export function CanvasEditor({ projectId, onBack, onRequireApiKey, showToast, sh
           { stream: true, systemInstruction: systemPrompt, reasoningEffort: "low" }
         );
 
-        const response = await fetch("/api/nova/proxy/text", {
+        const response = await fetch(apiPath("/api/nova/proxy/text"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

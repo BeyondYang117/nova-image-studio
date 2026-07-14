@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/workspace/dialogs/ConfirmDialog';
+import { apiPath } from '@/lib/integration';
 
 export interface QuickPromptItem {
   title: string;
@@ -21,7 +22,7 @@ interface QuickPromptDialogProps {
 
 async function fetchPrompts(): Promise<QuickPromptItem[]> {
   try {
-    const res = await fetch('/api/nova/prompts');
+    const res = await fetch(apiPath('/api/nova/prompts'));
     if (!res.ok) return [];
     return await res.json();
   } catch {

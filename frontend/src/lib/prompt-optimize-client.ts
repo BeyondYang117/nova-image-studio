@@ -8,6 +8,7 @@ import {
 } from '@/lib/nova-proxy-text';
 import type { TextProviderProtocol } from '@/lib/nova-text-protocol';
 import { readSseStream } from '@/lib/sse-stream-parser';
+import { apiPath, reportIntegrationErrorSignal } from '@/lib/integration';
 
 const OPTIMIZE_MODEL = 'gpt-5.4-mini';
 const OPTIMIZE_TIMEOUT_MS = 30_000;
@@ -197,7 +198,7 @@ async function runAttempt(
   }, OPTIMIZE_TIMEOUT_MS);
 
   try {
-    const response = await fetch('/api/nova/proxy/text', {
+    const response = await fetch(apiPath('/api/nova/proxy/text'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -212,7 +213,9 @@ async function runAttempt(
     });
 
     if (!response.ok) {
-      throw await readHttpError(response);
+      const httpError = await readHttpError(response);
+      reportIntegrationErrorSignal(httpError.message);
+      throw httpError;
     }
     if (!response.body) {
       throw new Error('响应没有可读流');

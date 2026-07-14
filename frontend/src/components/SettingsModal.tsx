@@ -60,6 +60,8 @@ import { checkModelsAvailability, type ModelStatus } from '@/lib/ccode-task-clie
 import { hasAnyApiKey } from '@/lib/settings-storage';
 import { BA_RANDOM_URL, BING_WALLPAPER_URL } from '@/lib/constants';
 import { PROMPT_DATA_SOURCES, getPromptSourceLabel } from '@/lib/prompt-gallery-data';
+import { IS_INTEGRATED, getIntegrationModels, getIntegrationSession } from '@/lib/integration';
+import { getIntegrationUpstreamBaseUrl } from '@/lib/integration-bootstrap';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -73,6 +75,15 @@ function cloneImageModel(model: ImageModelConfig): ImageModelConfig {
 
 function cloneTextModel(model: TextModelConfig): TextModelConfig {
   return { ...model };
+}
+
+// 集成模式下新增的模型直接带上平台凭证与网关地址（这两项对用户不可见不可改）
+function integrationCredentialPatch(): { apiKey: string; baseUrl: string } | null {
+  if (!IS_INTEGRATED) return null;
+  return {
+    apiKey: getIntegrationSession()?.relayKey || '',
+    baseUrl: getIntegrationUpstreamBaseUrl(),
+  };
 }
 
 function createImageModelDraft(): ImageModelConfig {
@@ -194,7 +205,7 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
   );
 
   const handleAddImageModel = () => {
-    const draft = createImageModelDraft();
+    const draft = { ...createImageModelDraft(), ...(integrationCredentialPatch() || {}) };
     setImageModels((prev) => [...prev, draft]);
     setSelectedImageModelId(draft.id);
   };
@@ -212,6 +223,12 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
         next.maxRefImages = preset.maxRefImages;
         next.maxOutputSize = preset.maxOutputSize;
         next.supportsAdvancedParams = preset.supportsAdvancedParams;
+        // 集成模式：凭证与地址锁定为平台值，模板不覆写
+        const locked = integrationCredentialPatch();
+        if (locked) {
+          next.apiKey = model.apiKey || locked.apiKey;
+          next.baseUrl = locked.baseUrl;
+        }
       }
       if (patch.protocol === 'google') {
         next.supportsAdvancedParams = false;
@@ -234,18 +251,19 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
   };
 
   const handleAddTextModel = () => {
-    const draft = createTextModelDraft();
+    const draft = { ...createTextModelDraft(), ...(integrationCredentialPatch() || {}) };
     setTextModels((prev) => [...prev, draft]);
     setSelectedTextModelId(draft.id);
   };
 
   const handleApplyTextTemplate = (id: string, protocol: TextProviderProtocol) => {
     const template = getDefaultTextModelTemplate(protocol);
+    const locked = integrationCredentialPatch();
     handleUpdateTextModel(id, {
       protocol: template.protocol,
       name: template.name,
       modelId: template.modelId,
-      baseUrl: template.baseUrl,
+      baseUrl: locked ? locked.baseUrl : template.baseUrl,
       note: template.note || getTextProviderDescription(template.protocol),
     });
   };
@@ -369,6 +387,17 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
 
   const completeImageOptions = imageModels.filter(isCompleteImageModel).map((model) => ({ value: model.id, label: model.name }));
   const completeTextOptions = textModels.filter(isCompleteTextModel).map((model) => ({ value: model.id, label: model.name }));
+  // 集成模式：模型 ID 从平台可用列表中选择（保留已失效的当前值以便用户知晓）
+  const platformModelOptions = useMemo(
+    () => (IS_INTEGRATED ? getIntegrationModels().map((name) => ({ value: name, label: name })) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isOpen],
+  );
+  const withCurrentOption = (options: { value: string; label: string }[], current: string) => (
+    current && !options.some((option) => option.value === current)
+      ? [{ value: current, label: `${current}（不在平台列表）` }, ...options]
+      : options
+  );
   const selectedImageOutputSizes = selectedImageModel
     ? getImageModelOutputSizes({
         ...selectedImageModel,
@@ -387,7 +416,11 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
             <Settings className="w-5 h-5 text-muted-foreground" />
             <DialogTitle>设置</DialogTitle>
           </div>
-          <DialogDescription>按模型分别配置协议、URL 和 API Key。至少完成一个图片模型和一个文本模型后，外部功能才会解锁。</DialogDescription>
+          <DialogDescription>
+            {IS_INTEGRATED
+              ? '模型与凭证已由平台托管，可在此调整默认模型与各模型的展示参数。'
+              : '按模型分别配置协议、URL 和 API Key。至少完成一个图片模型和一个文本模型后，外部功能才会解锁。'}
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="models" className="min-h-0 flex-1 gap-0">
@@ -475,31 +508,48 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-muted-foreground">模型 ID</label>
-                      <Input value={selectedImageModel.modelId} onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { modelId: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">Base URL</label>
-                      <Input value={selectedImageModel.baseUrl} onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { baseUrl: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">API Key</label>
-                      <div className="relative">
-                        <Input
-                          type={showImageApiKey ? "text" : "password"}
-                          value={selectedImageModel.apiKey}
-                          onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { apiKey: event.target.value })}
-                          className="pr-8"
+                      {IS_INTEGRATED ? (
+                        <Select
+                          value={selectedImageModel.modelId}
+                          onValueChange={(value) => handleUpdateImageModel(selectedImageModel.id, { modelId: value })}
+                          options={withCurrentOption(platformModelOptions, selectedImageModel.modelId)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowImageApiKey(!showImageApiKey)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          tabIndex={-1}
-                        >
-                          {showImageApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
+                      ) : (
+                        <Input value={selectedImageModel.modelId} onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { modelId: event.target.value })} />
+                      )}
                     </div>
+                    {IS_INTEGRATED ? (
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">接入方式</label>
+                        <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">API Key 与 Base URL 已由平台托管，按平台账户计费</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-xs text-muted-foreground">Base URL</label>
+                          <Input value={selectedImageModel.baseUrl} onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { baseUrl: event.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs text-muted-foreground">API Key</label>
+                          <div className="relative">
+                            <Input
+                              type={showImageApiKey ? "text" : "password"}
+                              value={selectedImageModel.apiKey}
+                              onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { apiKey: event.target.value })}
+                              className="pr-8"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowImageApiKey(!showImageApiKey)}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              tabIndex={-1}
+                            >
+                              {showImageApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-2">
                       <label className="text-xs text-muted-foreground">最大参考图数量</label>
                       <Input type="number" min={1} value={selectedImageModel.maxRefImages} onChange={(event) => handleUpdateImageModel(selectedImageModel.id, { maxRefImages: Number(event.target.value) || 1 })} />
@@ -587,31 +637,48 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs text-muted-foreground">模型 ID</label>
-                      <Input value={selectedTextModel.modelId} onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { modelId: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">Base URL</label>
-                      <Input value={selectedTextModel.baseUrl} onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { baseUrl: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs text-muted-foreground">API Key</label>
-                      <div className="relative">
-                        <Input
-                          type={showTextApiKey ? "text" : "password"}
-                          value={selectedTextModel.apiKey}
-                          onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { apiKey: event.target.value })}
-                          className="pr-8"
+                      {IS_INTEGRATED ? (
+                        <Select
+                          value={selectedTextModel.modelId}
+                          onValueChange={(value) => handleUpdateTextModel(selectedTextModel.id, { modelId: value })}
+                          options={withCurrentOption(platformModelOptions, selectedTextModel.modelId)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowTextApiKey(!showTextApiKey)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          tabIndex={-1}
-                        >
-                          {showTextApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
+                      ) : (
+                        <Input value={selectedTextModel.modelId} onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { modelId: event.target.value })} />
+                      )}
                     </div>
+                    {IS_INTEGRATED ? (
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">接入方式</label>
+                        <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">API Key 与 Base URL 已由平台托管，按平台账户计费</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-xs text-muted-foreground">Base URL</label>
+                          <Input value={selectedTextModel.baseUrl} onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { baseUrl: event.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs text-muted-foreground">API Key</label>
+                          <div className="relative">
+                            <Input
+                              type={showTextApiKey ? "text" : "password"}
+                              value={selectedTextModel.apiKey}
+                              onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { apiKey: event.target.value })}
+                              className="pr-8"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowTextApiKey(!showTextApiKey)}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              tabIndex={-1}
+                            >
+                              {showTextApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-xs text-muted-foreground">协议描述</label>
                       <Input value={selectedTextModel.note || ''} onChange={(event) => handleUpdateTextModel(selectedTextModel.id, { note: event.target.value })} />
