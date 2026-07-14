@@ -559,8 +559,8 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
     <div
       ref={containerRef}
       className={cn(
-        'relative flex h-full flex-1 min-h-[400px] flex-col rounded-2xl border border-border bg-card/60',
-        wideMode && 'h-full min-h-0 w-full'
+        'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card/60',
+        wideMode && 'w-full'
       )}
       onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
       onDragLeave={() => setIsDragOver(false)}
@@ -570,7 +570,7 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
         void handleFiles(e.dataTransfer.files);
       }}
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-4 py-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-4 py-2.5">
         <div className="flex shrink-0 items-center gap-2 text-sm font-medium">
           <Bot className="h-4 w-4 text-primary" />
           Agent
@@ -603,7 +603,7 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
 
       <div
         ref={scrollRef}
-        className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4"
       >
         {agent.messages.length === 0 && !agent.streamingText && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
@@ -761,7 +761,7 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
         </div>
       )}
 
-      <div className="border-t border-border p-3 pt-2">
+      <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-border p-3 pt-2">
         {uploads.length > 0 && (
           <div className="mb-2">
             <AttachmentChips
