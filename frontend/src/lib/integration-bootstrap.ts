@@ -38,6 +38,7 @@ interface SessionResponse {
     username?: string;
     display_name?: string;
     system_name?: string;
+    logo?: string;
     relay_key?: string;
     permissions?: Record<string, unknown>;
   };
@@ -229,6 +230,7 @@ export async function runIntegrationBootstrap(): Promise<IntegrationBootstrapRes
     username: String(data.username || ''),
     displayName: String(data.display_name || data.username || ''),
     systemName: String(data.system_name || ''),
+    logo: String(data.logo || ''),
     relayKey,
     permissions,
   };

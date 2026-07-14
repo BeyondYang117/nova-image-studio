@@ -201,6 +201,7 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
 
   // Popover 开关状态（用于选择后自动关闭）
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
+  const [textModelPopoverOpen, setTextModelPopoverOpen] = useState(false);
   const [sizePopoverOpen, setSizePopoverOpen] = useState(false);
   const [aspectPopoverOpen, setAspectPopoverOpen] = useState(false);
   const [tempPopoverOpen, setTempPopoverOpen] = useState(false);
@@ -907,6 +908,64 @@ export function AgentChatWorkspace({ wideMode = false, disabled = false, onConfi
               <Globe className="h-4 w-4" />
               <span className="text-xs">联网检索</span>
             </Button>
+          )}
+
+          {/* Agent 文本模型选择（始终可见：对话每一步都用它，默认模型渠道未必启用，需可手动切换） */}
+          {agent.textModelOptions.length > 0 && (
+            <Popover
+              open={textModelPopoverOpen}
+              onOpenChange={(open) => {
+                if (open) agent.refreshTextModelOptions();
+                setTextModelPopoverOpen(open);
+              }}
+            >
+              <PopoverTrigger
+                className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'gap-1')}
+                disabled={busy || disabled}
+                title="选择 Agent 对话使用的文本模型"
+              >
+                <Bot className="h-3 w-3" />
+                <span className="max-w-[9rem] shrink-0 truncate text-[11px]">
+                  {agent.textModelOptions.find(m => m.id === agent.textModelId)?.name
+                    || agent.textModelOptions.find(m => m.id === agent.textModelId)?.modelId
+                    || '默认文本模型'}
+                </span>
+              </PopoverTrigger>
+              <PopoverContent className="max-h-72 w-56 overflow-y-auto p-1" align="start">
+                <button
+                  type="button"
+                  onClick={() => {
+                    agent.setTextModel('');
+                    setTextModelPopoverOpen(false);
+                  }}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm hover:bg-muted',
+                    !agent.textModelId && 'bg-muted font-medium'
+                  )}
+                >
+                  默认文本模型
+                  {!agent.textModelId && <Check className="h-3.5 w-3.5" />}
+                </button>
+                {agent.textModelOptions.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      agent.setTextModel(option.id);
+                      setTextModelPopoverOpen(false);
+                    }}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-muted',
+                      agent.textModelId === option.id && 'bg-muted font-medium'
+                    )}
+                    title={option.modelId}
+                  >
+                    <span className="min-w-0 truncate">{option.name || option.modelId}</span>
+                    {agent.textModelId === option.id && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           )}
 
           {/* 意图识别开关 */}

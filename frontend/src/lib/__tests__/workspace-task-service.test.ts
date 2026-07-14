@@ -86,6 +86,7 @@ beforeEach(() => {
     apiKey: 'test-api-key',
     baseUrl: 'https://api.openai.com',
     protocol: 'openai',
+    modelId: 'gpt-image-1',
   });
 });
 

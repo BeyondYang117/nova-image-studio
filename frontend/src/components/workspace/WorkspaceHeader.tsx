@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { runImageAction, type ImageActionPayload } from '@/lib/image-actions';
+import { IS_INTEGRATED, apiPath, getIntegrationSession } from '@/lib/integration';
 
 import { BA_RANDOM_URL, BING_WALLPAPER_URL } from '@/lib/constants';
 
@@ -125,6 +126,18 @@ export const WorkspaceHeader = forwardRef<WorkspaceHeaderRef, WorkspaceHeaderPro
 
   useEffect(() => () => cleanupViewerObjectUrl(), [cleanupViewerObjectUrl]);
 
+  // 集成模式下用平台品牌（logo + 站点名）替换自带图标；独立部署仍用本地 favicon（挂载前缀感知）
+  const { brandLogo, brandTitle } = useMemo(() => {
+    if (IS_INTEGRATED) {
+      const session = getIntegrationSession();
+      return {
+        brandLogo: session?.logo || apiPath('/favicon.png'),
+        brandTitle: session?.systemName || 'Nova Image',
+      };
+    }
+    return { brandLogo: '/favicon.png', brandTitle: 'Nova Image' };
+  }, []);
+
   return (
     <header className={cn(sidebarMode ? 'xl:pb-0' : 'space-y-3 sm:space-y-5')}>
       <div className="flex items-start justify-between gap-2 sm:gap-4">
@@ -133,16 +146,16 @@ export const WorkspaceHeader = forwardRef<WorkspaceHeaderRef, WorkspaceHeaderPro
             type="button"
             onClick={onLogoClick}
             className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:rounded-xl"
-            aria-label="Nova Image logo"
+            aria-label={`${brandTitle} logo`}
           >
             <img
-              src="/favicon.png"
-              alt="Nova Image logo"
+              src={brandLogo}
+              alt={`${brandTitle} logo`}
               className="h-8 w-8 flex-shrink-0 rounded-lg object-cover ring-1 ring-border/60 sm:h-11 sm:w-11 sm:rounded-xl"
             />
           </button>
           <div className="hidden min-w-0 space-y-1 sm:block">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">Nova Image</h1>
+            <h1 className="truncate text-2xl font-semibold tracking-tight">{brandTitle}</h1>
             <p className="text-sm text-muted-foreground">批量 API 图像生成器</p>
           </div>
         </div>
@@ -206,10 +219,12 @@ export const WorkspaceHeader = forwardRef<WorkspaceHeaderRef, WorkspaceHeaderPro
             </DropdownMenu>
             <ThemeToggle />
             <WideModeToggle enabled={wideMode} onToggle={onToggleWideMode} />
-            <Button variant="outline" size="sm" onClick={onOpenSettings} className="gap-0 px-2 sm:gap-2 sm:px-2.5" title="设置" aria-label="设置">
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">设置</span>
-            </Button>
+            {!IS_INTEGRATED && (
+              <Button variant="outline" size="sm" onClick={onOpenSettings} className="gap-0 px-2 sm:gap-2 sm:px-2.5" title="设置" aria-label="设置">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">设置</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>

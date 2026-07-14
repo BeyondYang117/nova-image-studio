@@ -13,7 +13,7 @@ import { PromptGallery } from '@/components/PromptGallery';
 import { SettingsModal } from '@/components/SettingsModal';
 import { MissingApiKeyDialog } from '@/components/MissingApiKeyDialog';
 import { useQueueStatus } from '@/hooks/useQueueStatus';
-import { useWideMode } from '@/hooks/useWideMode';
+import { useWideMode, WIDE_MODE_MIN_WIDTH } from '@/hooks/useWideMode';
 import { useServerTaskPolling } from '@/hooks/useServerTaskPolling';
 import { useWorkspaceJobs } from '@/hooks/useWorkspaceJobs';
 import { WorkspaceHeader, type WorkspaceHeaderRef } from '@/components/workspace/WorkspaceHeader';
@@ -43,6 +43,7 @@ import {
   type SubmitActions,
 } from '@/lib/workspace-task-service';
 import { cn } from '@/lib/utils';
+import { IS_INTEGRATED } from '@/lib/integration';
 import { BA_RANDOM_URL, BING_WALLPAPER_URL } from '@/lib/constants';
 
 export function WorkspaceShell() {
@@ -302,10 +303,12 @@ export function WorkspaceShell() {
                       {wideMode ? <PanelLeftClose className="size-4 shrink-0" /> : <PanelLeftOpen className="size-4 shrink-0" />}
                       {wideMode ? '退出宽屏' : '宽屏'}
                     </Button>
-                    <Button variant="outline" size="sm" className="w-full justify-start gap-2 rounded-xl px-3 text-xs" onClick={() => setSettingsOpen(true)}>
-                      <Settings className="size-4 shrink-0" />
-                      设置
-                    </Button>
+                    {!IS_INTEGRATED && (
+                      <Button variant="outline" size="sm" className="w-full justify-start gap-2 rounded-xl px-3 text-xs" onClick={() => setSettingsOpen(true)}>
+                        <Settings className="size-4 shrink-0" />
+                        设置
+                      </Button>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -402,7 +405,15 @@ export function WorkspaceShell() {
                 <CanvasWorkspace
                   wideMode={wideMode}
                   onConfigureApiKey={() => setSettingsOpen(true)}
-                  onEnableWideMode={() => { if (!wideMode) toggleWideMode(); }}
+                  onEnableWideMode={() => {
+                    if (wideMode) return;
+                    // 视口（集成模式下为 iframe 宽度，宿主侧栏会挤占）不足时 toggle 会静默拒绝，改为明确提示
+                    if (typeof window !== 'undefined' && window.innerWidth < WIDE_MODE_MIN_WIDTH) {
+                      showToast(`当前窗口宽度不足 ${WIDE_MODE_MIN_WIDTH}px，请收起平台侧边栏或使用更大的屏幕后再试`, 'info');
+                      return;
+                    }
+                    toggleWideMode();
+                  }}
                   showToast={showToast}
                   showPromptGallery={promptGallery.showPromptGallery}
                 />

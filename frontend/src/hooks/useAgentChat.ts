@@ -12,7 +12,7 @@ import {
   type AgentResolvedLayout,
 } from '@/lib/model-capabilities';
 import type { ModelId } from '@/lib/gemini-config';
-import { getCompleteImageModels, loadRegistry } from '@/lib/nova-models';
+import { getCompleteImageModels, getCompleteTextModels, loadRegistry, type TextModelConfig } from '@/lib/nova-models';
 import {
   streamAgentChat,
   describeImage,
@@ -43,8 +43,30 @@ import {
   clearPendingGeneration,
   type PendingGenerationData,
 } from '@/lib/agent-context-store';
-import { getDefaultConfiguredTextModel } from '@/lib/model-endpoints';
+import { getConfiguredTextModel, getDefaultConfiguredTextModel } from '@/lib/model-endpoints';
 import { supportsAgentNativeWebSearch } from '@/lib/nova-text-protocol';
+
+// Agent 对话使用的文本模型可由用户手动指定，覆盖注册表默认值（平台默认模型所在渠道未必启用）
+const AGENT_TEXT_MODEL_STORAGE_KEY = 'nova-agent-text-model';
+
+function loadAgentTextModelId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(AGENT_TEXT_MODEL_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function persistAgentTextModelId(id: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (id) window.localStorage.setItem(AGENT_TEXT_MODEL_STORAGE_KEY, id);
+    else window.localStorage.removeItem(AGENT_TEXT_MODEL_STORAGE_KEY);
+  } catch {
+    // 忽略持久化失败（隐私模式等）
+  }
+}
 
 export type AgentPhase = 'idle' | 'loading' | 'describing' | 'streaming' | 'proposal' | 'generating';
 
@@ -183,6 +205,9 @@ export function useAgentChat() {
   const [streamingText, setStreamingText] = useState('');
   const [streamingReasoning, setStreamingReasoning] = useState('');
   const [imageModel, setImageModelState] = useState<ModelId>(AGENT_DEFAULT_IMAGE_MODEL_FALLBACK);
+  // 用户手动选择的 Agent 文本模型 id（空表示跟随注册表默认）
+  const [textModelId, setTextModelIdState] = useState<string>('');
+  const [textModelOptions, setTextModelOptions] = useState<TextModelConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [generatingTaskId, setGeneratingTaskId] = useState<string | null>(null);
   const [generatingStartedAt, setGeneratingStartedAt] = useState<number | null>(null);
@@ -212,21 +237,35 @@ export function useAgentChat() {
   const imageModelRef = useRef(imageModel);
   useEffect(() => { imageModelRef.current = imageModel; }, [imageModel]);
 
+  // 镜像 textModelId，供 runChat 等回调中同步读取（回调依赖列表不含它，避免重建）
+  const textModelIdRef = useRef(textModelId);
+  useEffect(() => { textModelIdRef.current = textModelId; }, [textModelId]);
+
+  // 解析当前生效的 Agent 文本模型：优先用户手动指定，其次注册表默认
+  const resolveAgentTextModel = useCallback(() => {
+    const manualId = textModelIdRef.current;
+    if (manualId) {
+      const picked = getConfiguredTextModel(manualId);
+      if (picked?.apiKey && picked.baseUrl && picked.modelId) return picked;
+    }
+    return getDefaultConfiguredTextModel('agent');
+  }, []);
+
   const getAgentTextModelConfig = useCallback(() => {
-    const configured = getDefaultConfiguredTextModel('agent');
+    const configured = resolveAgentTextModel();
     if (!configured?.apiKey || !configured.baseUrl || !configured.modelId) {
       throw new Error('请先在设置中完成 Agent 默认文本模型配置');
     }
     return configured;
-  }, []);
+  }, [resolveAgentTextModel]);
 
   const agentSupportsWebSearch = useCallback(() => {
-    const configured = getDefaultConfiguredTextModel('agent');
+    const configured = resolveAgentTextModel();
     if (!configured?.apiKey || !configured.baseUrl || !configured.modelId) {
       return false;
     }
     return supportsAgentNativeWebSearch(configured.protocol);
-  }, []);
+  }, [resolveAgentTextModel]);
 
   // ===== 流式更新批处理（rAF 节流） =====
   const streamingTextBufRef = useRef('');
@@ -278,6 +317,16 @@ export function useAgentChat() {
       setImages(session.images);
       seqRef.current = session.images.reduce((max, img) => Math.max(max, parseImgSeq(img.imgId)), 0);
       if (session.imageModel) setImageModelState(session.imageModel as ModelId);
+
+      // 恢复用户手动选择的文本模型；若该模型已不在完整列表中则回落到默认
+      const completeText = getCompleteTextModels(loadRegistry());
+      setTextModelOptions(completeText);
+      const savedTextModelId = loadAgentTextModelId();
+      if (savedTextModelId && completeText.some(m => m.id === savedTextModelId)) {
+        setTextModelIdState(savedTextModelId);
+      } else if (savedTextModelId) {
+        persistAgentTextModelId('');
+      }
 
       if (pending) {
         // 恢复待确认的提案，使用户刷新后仍可看到「等待你确认」卡片
@@ -951,6 +1000,17 @@ export function useAgentChat() {
     void saveImageModel(model);
   }, []);
 
+  // 手动切换 Agent 文本模型；传空字符串表示恢复注册表默认
+  const setTextModel = useCallback((id: string) => {
+    setTextModelIdState(id);
+    persistAgentTextModelId(id);
+  }, []);
+
+  // 打开选择器时刷新可选文本模型列表（设置里可能新增/删除了模型）
+  const refreshTextModelOptions = useCallback(() => {
+    setTextModelOptions(getCompleteTextModels(loadRegistry()));
+  }, []);
+
   const toggleWebSearch = useCallback(() => {
     if (!agentSupportsWebSearch()) return;
     setWebSearchEnabled(prev => {
@@ -1130,6 +1190,8 @@ export function useAgentChat() {
     streamingText,
     streamingReasoning,
     imageModel,
+    textModelId,
+    textModelOptions,
     error,
     generatingTaskId,
     generatingStartedAt,
@@ -1149,6 +1211,8 @@ export function useAgentChat() {
     stopStreaming,
     skipDescribing,
     setImageModel,
+    setTextModel,
+    refreshTextModelOptions,
     toggleWebSearch,
     toggleIntentRecognition,
     clearSession,

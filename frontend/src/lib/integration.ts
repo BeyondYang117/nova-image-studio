@@ -24,6 +24,7 @@ export interface IntegrationSessionData {
   username: string;
   displayName: string;
   systemName: string;
+  logo: string;
   relayKey: string;
   permissions: IntegrationPermissions;
 }

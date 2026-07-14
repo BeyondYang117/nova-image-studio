@@ -429,10 +429,13 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
               <ImageIcon className="w-4 h-4" />
               模型配置
             </TabsTrigger>
-            <TabsTrigger value="backup" className="gap-2 rounded-none border-b-2 border-transparent data-active:border-primary data-active:bg-transparent data-active:shadow-none px-4 py-3">
-              <Database className="w-4 h-4" />
-              备份
-            </TabsTrigger>
+            {/* 集成模式下备份/恢复不适用：数据托管在平台侧且为多用户环境，单用户浏览器本地备份既不合理、又会把平台下发的 relay_key 明文导出到本地 ZIP，故整体隐藏 */}
+            {!IS_INTEGRATED && (
+              <TabsTrigger value="backup" className="gap-2 rounded-none border-b-2 border-transparent data-active:border-primary data-active:bg-transparent data-active:shadow-none px-4 py-3">
+                <Database className="w-4 h-4" />
+                备份
+              </TabsTrigger>
+            )}
             <TabsTrigger value="about" className="gap-2 rounded-none border-b-2 border-transparent data-active:border-primary data-active:bg-transparent data-active:shadow-none px-4 py-3">
               <Info className="w-4 h-4" />
               关于
@@ -750,6 +753,7 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
             </div>
           </TabsContent>
 
+          {!IS_INTEGRATED && (
           <TabsContent value="backup" className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 mt-0">
             <div className="space-y-4">
               <div className="space-y-2">
@@ -803,6 +807,7 @@ export function SettingsModal({ isOpen, onClose, onApiKeyChange }: SettingsModal
               </div>
             </div>
           </TabsContent>
+          )}
 
           <TabsContent value="about" className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 mt-0">
             <div className="space-y-4 text-sm">
